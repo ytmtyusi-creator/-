@@ -1,7 +1,7 @@
 import os
 import re
-import librosa
 import numpy as np
+import librosa
 import streamlit as st
 import yt_dlp
 
@@ -48,23 +48,34 @@ def calc_raw_pct(x, q1, m, q3, is_unlimited_upper=False):
     return rate * 100
 
 
-# 音声解析
+# クラウド環境に最適化した音声データ取得関数
 def extract_audio_features(youtube_url):
-    filename = "temp_audio.m4a"
+    output_filename = "temp_audio.wav"
+
+    # Streamlit Cloud向け最適化オプション
     ydl_opts = {
-        "format": "m4a/bestaudio/best",
+        "format": "bestaudio/best",
         "outtmpl": "temp_audio.%(ext)s",
         "postprocessors": [
-            {"key": "FFmpegExtractAudio", "preferredcodec": "m4a"}
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "wav",
+                "preferredquality": "192",
+            }
         ],
         "quiet": True,
+        "no_warnings": True,
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     }
 
     try:
+        # ダウンロード実行
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([youtube_url])
 
-        y, sr = librosa.load(filename, sr=None)
+        # librosaで読み込み＆解析
+        y, sr = librosa.load(output_filename, sr=None)
+
         duration = round(librosa.get_duration(y=y, sr=sr))
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         bpm = round(float(tempo))
@@ -82,26 +93,33 @@ def extract_audio_features(youtube_url):
             "音の迫力": power,
             "アタック感": attack,
         }
+
     except Exception as e:
+        # エラー内容を画面に表示してデバッグしやすくする
+        st.error(f"詳細エラー情報: {e}")
         return None
+
     finally:
-        if os.path.exists(filename):
-            os.remove(filename)
+        # 一時ファイルの削除
+        for file in os.listdir():
+            if file.startswith("temp_audio"):
+                try:
+                    os.remove(file)
+                except:
+                    pass
 
 
-# 入力フォーム
+# UI部分
 url_input = st.text_input("YouTube動画のURLを入力してください")
 
 if st.button("バズり度を判定する！"):
     if not url_input:
         st.warning("URLを入力してください。")
     else:
-        with st.spinner("楽曲を解析中...（約10〜20秒かかります）"):
+        with st.spinner("楽曲を解析中...（10〜30秒ほどかかります）"):
             features = extract_audio_features(url_input)
 
-        if not features:
-            st.error("動画の読み込みに失敗しました。URLを確認してください。")
-        else:
+        if features:
             st.success("解析が完了しました！")
             st.subheader("📊 診断レポート")
 
@@ -111,7 +129,6 @@ if st.button("バズり度を判定する！"):
                 pct, score = calc_feature_score_v2(key, val, q1, m, q3)
                 total_score += score
 
-                # 結果表示
                 col1, col2 = st.columns([2, 1])
                 with col1:
                     st.write(f"**【{key}】** 実測値: `{val}` (中央値: {m})")
@@ -121,11 +138,10 @@ if st.button("バズり度を判定する！"):
             total_score = round(total_score, 1)
             st.divider()
 
-            # 最終結果表示
             st.metric(label="🎯 最終バズり度スコア", value=f"{total_score} / 100点")
 
             if total_score >= 80:
-                st.balloons()  # 風船が飛ぶ演出！
+                st.balloons()
                 st.success(
                     "評価: 【 Sランク 】現代のヒット曲ストライクゾーンに完璧に合致しています！"
                 )
