@@ -1,0 +1,5 @@
+streamlit
+librosa
+yt-dlp
+numpy
+ffmpeg-python
