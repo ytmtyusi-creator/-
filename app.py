@@ -48,11 +48,11 @@ def calc_raw_pct(x, q1, m, q3, is_unlimited_upper=False):
     return rate * 100
 
 
-# クラウド環境に最適化した音声データ取得関数
+# 403ブロック回避に特化した音声取得関数
 def extract_audio_features(youtube_url):
     output_filename = "temp_audio.wav"
 
-    # Streamlit Cloud向け最適化オプション
+    # YouTube側のブロックを完全回避するクライアント偽装設定
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": "temp_audio.%(ext)s",
@@ -65,7 +65,13 @@ def extract_audio_features(youtube_url):
         ],
         "quiet": True,
         "no_warnings": True,
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        # iOSアプリ・Androidアプリの通信に偽装して403を回避
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "mweb"],
+                "skip": ["dash", "hls"],
+            }
+        },
     }
 
     try:
@@ -95,12 +101,10 @@ def extract_audio_features(youtube_url):
         }
 
     except Exception as e:
-        # エラー内容を画面に表示してデバッグしやすくする
         st.error(f"詳細エラー情報: {e}")
         return None
 
     finally:
-        # 一時ファイルの削除
         for file in os.listdir():
             if file.startswith("temp_audio"):
                 try:
